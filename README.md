@@ -1,6 +1,7 @@
 # FlowBoard
 
 A real-time collaborative Kanban board. Multiple users can create, edit, and drag tasks between columns, comment on tasks, and see every change sync instantly across all connected clients — no refresh needed.
+
 flowboard-project/
 
 ├── client/   React + TypeScript frontend
@@ -63,9 +64,3 @@ Open the printed URL (typically `http://localhost:5173`). Open it in a second br
 cd client
 npm test
 ```
-
-## What I would build next
-
-- User authentication (currently each connection gets a random display name)
-- Integration tests for the drag-and-drop interaction itself, beyond the current unit tests on state logic
-- A real database in place of the JSON file, if the app needed to scale beyond a single server instance

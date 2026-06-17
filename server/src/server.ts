@@ -5,13 +5,25 @@ import cors from "cors";
 import { v4 as uuid } from "uuid";
 import fs from "fs";
 import path from "path";
+import {
+  createSession,
+  getSession,
+  destroySession,
+  parseCookies,
+  exchangeCodeForUser,
+} from "./auth";
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+const SESSION_COOKIE = "flowboard_session";
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
-const httpServer = createServer(app);
-const wss = new WebSocketServer({ server: httpServer });
+function setSessionCookie(res: express.Response, sessionId: string) {
+  res.cookie(SESSION_COOKIE, sessionId, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    maxAge: 1000 * 60 * 60 * 24 * 30,
+  });
+}
 
 interface Task {
   id: string;
@@ -21,21 +33,25 @@ interface Task {
   columnId: string;
   createdAt: number;
 }
+
 interface Column {
   id: string;
   title: string;
   taskIds: string[];
 }
+
 interface BoardState {
   tasks: Record<string, Task>;
   columns: Record<string, Column>;
   columnOrder: string[];
 }
+
 interface ActivityEntry {
   id: string;
   message: string;
   timestamp: number;
 }
+
 interface Comment {
   id: string;
   taskId: string;
@@ -44,6 +60,7 @@ interface Comment {
   text: string;
   timestamp: number;
 }
+
 interface PersistedData {
   state: BoardState;
   activityLog: ActivityEntry[];
@@ -52,33 +69,80 @@ interface PersistedData {
 
 const DATA_FILE = path.join(__dirname, "..", "data.json");
 
-const defaultState: BoardState = {
-  tasks: {
-    "task-1": { id: "task-1", title: "Set up project structure", description: "Initialize Vite + React + TypeScript.", priority: "high", columnId: "col-done", createdAt: Date.now() - 86400000 * 2 },
-    "task-2": { id: "task-2", title: "Design the data model", description: "Normalized vs nested state decision.", priority: "high", columnId: "col-done", createdAt: Date.now() - 86400000 },
-    "task-3": { id: "task-3", title: "Build drag and drop", description: "Wire up dnd-kit between columns.", priority: "medium", columnId: "col-progress", createdAt: Date.now() - 3600000 * 5 },
-    "task-4": { id: "task-4", title: "Add task creation form", description: "Modal with validation.", priority: "medium", columnId: "col-todo", createdAt: Date.now() - 3600000 * 2 },
-    "task-5": { id: "task-5", title: "Write README and decisions doc", description: "Document library choices.", priority: "low", columnId: "col-todo", createdAt: Date.now() - 3600000 },
-  },
-  columns: {
-    "col-todo": { id: "col-todo", title: "To Do", taskIds: ["task-4", "task-5"] },
-    "col-progress": { id: "col-progress", title: "In Progress", taskIds: ["task-3"] },
-    "col-done": { id: "col-done", title: "Done", taskIds: ["task-1", "task-2"] },
-  },
-  columnOrder: ["col-todo", "col-progress", "col-done"],
-};
+const USER_COLORS = [
+  "#5B5FE3", "#E8745B", "#7C9A82", "#C98A3E", "#3E8FC9", "#9A5BC9",
+];
+
+const GUEST_NAMES = [
+  "Alex", "Sam", "Jordan", "Taylor", "Morgan", "Casey", "Riley", "Avery",
+];
 
 function loadData(): PersistedData {
   if (fs.existsSync(DATA_FILE)) {
     try {
       const raw = fs.readFileSync(DATA_FILE, "utf-8");
       return JSON.parse(raw);
-    } catch (e) {
-      console.error("Failed to parse data.json, falling back to defaults:", e);
+    } catch {
+      // fall through to default
     }
   }
-  return { state: defaultState, activityLog: [], comments: {} };
+  return {
+    state: {
+      tasks: {
+        "task-1": {
+          id: "task-1",
+          title: "Set up project structure",
+          description: "Initialize Vite + React + TypeScript, configure folder layout.",
+          priority: "high",
+          columnId: "col-done",
+          createdAt: Date.now() - 86400000 * 2,
+        },
+        "task-2": {
+          id: "task-2",
+          title: "Design the data model",
+          description: "Decide between normalized vs nested state for tasks and columns.",
+          priority: "high",
+          columnId: "col-done",
+          createdAt: Date.now() - 86400000 * 2,
+        },
+        "task-3": {
+          id: "task-3",
+          title: "Build drag and drop",
+          description: "Wire up dnd-kit so tasks can move between columns smoothly.",
+          priority: "medium",
+          columnId: "col-progress",
+          createdAt: Date.now() - 3600000 * 5,
+        },
+        "task-4": {
+          id: "task-4",
+          title: "Add task creation form",
+          description: "Modal with title, description, and priority fields, with validation.",
+          priority: "medium",
+          columnId: "col-todo",
+          createdAt: Date.now() - 3600000 * 2,
+        },
+        "task-5": {
+          id: "task-5",
+          title: "Write README and decisions doc",
+          description: "Document why each library was chosen, for the internship review.",
+          priority: "low",
+          columnId: "col-todo",
+          createdAt: Date.now() - 3600000,
+        },
+      },
+      columns: {
+        "col-todo": { id: "col-todo", title: "To Do", taskIds: ["task-4", "task-5"] },
+        "col-progress": { id: "col-progress", title: "In Progress", taskIds: ["task-3"] },
+        "col-done": { id: "col-done", title: "Done", taskIds: ["task-1", "task-2"] },
+      },
+      columnOrder: ["col-todo", "col-progress", "col-done"],
+    },
+    activityLog: [],
+    comments: {},
+  };
 }
+
+let { state, activityLog, comments } = loadData();
 
 let saveTimeout: NodeJS.Timeout | null = null;
 function saveData() {
@@ -89,133 +153,236 @@ function saveData() {
   }, 150);
 }
 
-const loaded = loadData();
-const state: BoardState = loaded.state;
-const activityLog: ActivityEntry[] = loaded.activityLog;
-const comments: Record<string, Comment[]> = loaded.comments;
+const app = express();
+app.use(
+  cors({
+    origin: FRONTEND_URL,
+    credentials: true,
+  })
+);
+app.use(express.json());
 
-const clients = new Map<WebSocket, { id: string; name: string; color: string }>();
+const httpServer = createServer(app);
+const wss = new WebSocketServer({ server: httpServer });
 
-const USER_COLORS = ["#5B5FE3", "#E8745B", "#7C9A82", "#C98A3E", "#9B59B6", "#E74C3C"];
-const USER_NAMES = ["Alex", "Sam", "Jordan", "Casey", "Riley", "Morgan"];
+app.get("/auth/github", (req, res) => {
+  const clientId = process.env.GITHUB_CLIENT_ID;
+  if (!clientId) {
+    res.status(500).send("GitHub OAuth is not configured.");
+    return;
+  }
+  const callbackUrl = `${req.protocol}://${req.get("host")}/auth/github/callback`;
+  const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(
+    callbackUrl
+  )}&scope=read:user`;
+  res.redirect(githubAuthUrl);
+});
 
-function broadcast(message: object, exclude?: WebSocket) {
+app.get("/auth/github/callback", async (req, res) => {
+  const code = req.query.code as string | undefined;
+  if (!code) {
+    res.redirect(`${FRONTEND_URL}?auth_error=missing_code`);
+    return;
+  }
+
+  try {
+    const user = await exchangeCodeForUser(code);
+    const sessionId = createSession(user);
+    setSessionCookie(res, sessionId);
+    res.redirect(FRONTEND_URL);
+  } catch (err) {
+    console.error("GitHub OAuth callback failed:", err);
+    res.redirect(`${FRONTEND_URL}?auth_error=github_failed`);
+  }
+});
+
+app.get("/auth/me", (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const user = getSession(cookies[SESSION_COOKIE]);
+  res.json({ user });
+});
+
+app.post("/auth/logout", (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  destroySession(cookies[SESSION_COOKIE]);
+  res.clearCookie(SESSION_COOKIE);
+  res.json({ ok: true });
+});
+
+interface ConnectedUser {
+  id: string;
+  name: string;
+  color: string;
+  avatarUrl: string | null;
+  provider: "github" | "guest";
+  ws: WebSocket;
+}
+
+const connectedUsers = new Map<WebSocket, ConnectedUser>();
+
+function broadcast(message: unknown, exclude?: WebSocket) {
   const data = JSON.stringify(message);
-  clients.forEach((_, client) => {
+  wss.clients.forEach((client) => {
     if (client !== exclude && client.readyState === WebSocket.OPEN) {
       client.send(data);
     }
   });
 }
 
-function broadcastAll(message: object) {
-  const data = JSON.stringify(message);
-  clients.forEach((_, client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(data);
-    }
-  });
+function getOnlineUsers() {
+  return Array.from(connectedUsers.values()).map((u) => ({
+    id: u.id,
+    name: u.name,
+    color: u.color,
+    avatarUrl: u.avatarUrl,
+    provider: u.provider,
+  }));
 }
 
 function logActivity(message: string) {
   const entry: ActivityEntry = { id: uuid(), message, timestamp: Date.now() };
-  activityLog.unshift(entry);
-  if (activityLog.length > 50) activityLog.pop();
-  broadcastAll({ type: "ACTIVITY_ADDED", entry });
-  saveData();
+  activityLog = [entry, ...activityLog].slice(0, 50);
+  broadcast({ type: "ACTIVITY_ADDED", entry });
 }
 
-wss.on("connection", (ws) => {
-  const userIndex = Math.floor(Math.random() * USER_NAMES.length);
-  const user = { id: uuid(), name: USER_NAMES[userIndex], color: USER_COLORS[userIndex] };
-  clients.set(ws, user);
+wss.on("connection", (ws, req) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const sessionUser = getSession(cookies[SESSION_COOKIE]);
 
-  ws.send(JSON.stringify({ type: "INIT", state, user, users: Array.from(clients.values()), activityLog, comments }));
-  broadcast({ type: "USER_JOINED", user, users: Array.from(clients.values()) }, ws);
+  const url = new URL(req.url ?? "", `http://${req.headers.host}`);
+  const requestedGuestName = url.searchParams.get("guestName");
+
+  const userId = sessionUser?.id ?? uuid();
+  const name =
+    sessionUser?.name ??
+    (requestedGuestName?.trim() ||
+      GUEST_NAMES[Math.floor(Math.random() * GUEST_NAMES.length)]);
+  const color = sessionUser?.color ?? USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
+  const avatarUrl = sessionUser?.avatarUrl ?? null;
+  const provider = sessionUser?.provider ?? "guest";
+
+  const user: ConnectedUser = { id: userId, name, color, avatarUrl, provider, ws };
+  connectedUsers.set(ws, user);
+
+  ws.send(
+    JSON.stringify({
+      type: "INIT",
+      state,
+      user: { id: userId, name, color, avatarUrl, provider },
+      users: getOnlineUsers(),
+      activityLog,
+      comments,
+    })
+  );
+
+  broadcast({ type: "USER_JOINED", users: getOnlineUsers() }, ws);
+  logActivity(`${name} joined the board`);
 
   ws.on("message", (raw) => {
-    try {
-      const msg = JSON.parse(raw.toString());
-      switch (msg.type) {
-        case "ADD_TASK": {
-          const id = uuid();
-          const task: Task = { id, title: msg.title, description: msg.description, priority: msg.priority, columnId: msg.columnId, createdAt: Date.now() };
-          state.tasks[id] = task;
-          state.columns[msg.columnId].taskIds.push(id);
-          broadcastAll({ type: "TASK_ADDED", task });
-          logActivity(`${user.name} created "${task.title}"`);
-          saveData();
-          break;
-        }
-        case "UPDATE_TASK": {
-          state.tasks[msg.taskId] = { ...state.tasks[msg.taskId], ...msg.updates };
-          broadcastAll({ type: "TASK_UPDATED", taskId: msg.taskId, updates: msg.updates });
-          logActivity(`${user.name} edited "${state.tasks[msg.taskId].title}"`);
-          saveData();
-          break;
-        }
-        case "DELETE_TASK": {
-          const task = state.tasks[msg.taskId];
-          if (!task) break;
-          delete state.tasks[msg.taskId];
-          state.columns[task.columnId].taskIds = state.columns[task.columnId].taskIds.filter((id) => id !== msg.taskId);
-          broadcastAll({ type: "TASK_DELETED", taskId: msg.taskId, columnId: task.columnId });
-          logActivity(`${user.name} deleted "${task.title}"`);
-          saveData();
-          break;
-        }
-        case "MOVE_TASK": {
-          const { taskId, sourceColumnId, destColumnId, destIndex } = msg;
-          const movedTaskTitle = state.tasks[taskId].title;
-          state.columns[sourceColumnId].taskIds = state.columns[sourceColumnId].taskIds.filter((id) => id !== taskId);
-          const destIds = sourceColumnId === destColumnId ? state.columns[sourceColumnId].taskIds : [...state.columns[destColumnId].taskIds];
-          destIds.splice(destIndex, 0, taskId);
-          state.columns[destColumnId].taskIds = destIds;
-          state.tasks[taskId].columnId = destColumnId;
-          broadcastAll({ type: "TASK_MOVED", taskId, sourceColumnId, destColumnId, destIndex });
-          if (sourceColumnId !== destColumnId) {
-            logActivity(`${user.name} moved "${movedTaskTitle}" to ${state.columns[destColumnId].title}`);
-          }
-          saveData();
-          break;
-        }
-        case "CURSOR_MOVE": {
-          broadcast({ type: "CURSOR_MOVE", userId: user.id, x: msg.x, y: msg.y, name: user.name, color: user.color }, ws);
-          break;
-        }
-        case "ADD_COMMENT": {
-          const comment: Comment = {
-            id: uuid(),
-            taskId: msg.taskId,
-            authorName: user.name,
-            authorColor: user.color,
-            text: msg.text,
-            timestamp: Date.now(),
-          };
-          if (!comments[msg.taskId]) comments[msg.taskId] = [];
-          comments[msg.taskId].push(comment);
-          broadcastAll({ type: "COMMENT_ADDED", comment });
-          saveData();
-          break;
-        }
+    const msg = JSON.parse(raw.toString());
+    const currentUser = connectedUsers.get(ws);
+    if (!currentUser) return;
+
+    switch (msg.type) {
+      case "ADD_TASK": {
+        const taskId = uuid();
+        const task: Task = {
+          id: taskId,
+          title: msg.title,
+          description: msg.description,
+          priority: msg.priority,
+          columnId: msg.columnId,
+          createdAt: Date.now(),
+        };
+        state.tasks[taskId] = task;
+        state.columns[msg.columnId].taskIds.push(taskId);
+        broadcast({ type: "TASK_ADDED", task });
+        logActivity(`${currentUser.name} added "${task.title}"`);
+        saveData();
+        break;
       }
-    } catch (e) {
-      console.error("Failed to parse message:", e);
+
+      case "UPDATE_TASK": {
+        const task = state.tasks[msg.taskId];
+        if (!task) return;
+        state.tasks[msg.taskId] = { ...task, ...msg.updates };
+        broadcast({ type: "TASK_UPDATED", taskId: msg.taskId, updates: msg.updates });
+        logActivity(`${currentUser.name} edited "${task.title}"`);
+        saveData();
+        break;
+      }
+
+      case "DELETE_TASK": {
+        const task = state.tasks[msg.taskId];
+        if (!task) return;
+        delete state.tasks[msg.taskId];
+        state.columns[task.columnId].taskIds = state.columns[task.columnId].taskIds.filter(
+          (id) => id !== msg.taskId
+        );
+        broadcast({ type: "TASK_DELETED", taskId: msg.taskId });
+        logActivity(`${currentUser.name} deleted "${task.title}"`);
+        saveData();
+        break;
+      }
+
+      case "MOVE_TASK": {
+        const { taskId, sourceColumnId, destColumnId, destIndex } = msg;
+        const sourceColumn = state.columns[sourceColumnId];
+        const destColumn = state.columns[destColumnId];
+        if (!sourceColumn || !destColumn || !state.tasks[taskId]) return;
+
+        const sourceTaskIds = sourceColumn.taskIds.filter((id) => id !== taskId);
+        const destTaskIds =
+          sourceColumnId === destColumnId ? sourceTaskIds : [...destColumn.taskIds];
+        destTaskIds.splice(destIndex, 0, taskId);
+
+        state.tasks[taskId].columnId = destColumnId;
+        state.columns[sourceColumnId].taskIds = sourceTaskIds;
+        state.columns[destColumnId].taskIds = destTaskIds;
+
+        broadcast({ type: "TASK_MOVED", taskId, sourceColumnId, destColumnId, destIndex });
+        saveData();
+        break;
+      }
+
+      case "CURSOR_MOVE": {
+        broadcast(
+          { type: "CURSOR_MOVE", userId: currentUser.id, name: currentUser.name, color: currentUser.color, x: msg.x, y: msg.y },
+          ws
+        );
+        break;
+      }
+
+      case "ADD_COMMENT": {
+        const comment: Comment = {
+          id: uuid(),
+          taskId: msg.taskId,
+          authorName: currentUser.name,
+          authorColor: currentUser.color,
+          text: msg.text,
+          timestamp: Date.now(),
+        };
+        if (!comments[msg.taskId]) comments[msg.taskId] = [];
+        comments[msg.taskId].push(comment);
+        broadcast({ type: "COMMENT_ADDED", comment });
+        saveData();
+        break;
+      }
     }
   });
 
   ws.on("close", () => {
-    clients.delete(ws);
-    broadcastAll({ type: "USER_LEFT", userId: user.id, users: Array.from(clients.values()) });
+    const user = connectedUsers.get(ws);
+    connectedUsers.delete(ws);
+    if (user) {
+      broadcast({ type: "USER_LEFT", users: getOnlineUsers() });
+      logActivity(`${user.name} left the board`);
+    }
   });
-});
-
-app.get("/api/board", (_req, res) => {
-  res.json(state);
 });
 
 const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, () => {
   console.log(`FlowBoard server running on http://localhost:${PORT}`);
-  console.log(`WebSocket server ready`);
+  console.log("WebSocket server ready");
 });

@@ -1,0 +1,132 @@
+.board-page {
+  min-height: 100vh;
+  padding: 32px 40px;
+}
+
+.board-header {
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.board-logo {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 28px;
+  font-weight: 500;
+  margin: 0;
+  color: var(--color-ink);
+}
+
+.board-tagline {
+  font-size: 13px;
+  color: var(--color-ink-muted);
+}
+
+.board-columns {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: 16px;
+}
+
+@media (max-width: 720px) {
+  .board-page {
+    padding: 20px;
+  }
+
+  .board-columns {
+    flex-direction: column;
+  }
+
+  .column {
+    width: 100%;
+    max-height: none;
+  }
+}
+.presence-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.presence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.presence-dot-online {
+  background: var(--color-priority-low);
+  box-shadow: 0 0 0 3px var(--color-priority-low-soft);
+}
+
+.presence-dot-offline {
+  background: var(--color-ink-muted);
+}
+
+.presence-label {
+  font-size: 12px;
+  color: var(--color-ink-muted);
+  font-weight: 500;
+}
+
+.presence-avatars {
+  display: flex;
+  margin-left: 4px;
+}
+
+.presence-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  border: 2px solid var(--color-bg);
+  margin-left: -8px;
+}
+
+.presence-avatar:first-child {
+  margin-left: 0;
+}
+.remote-cursor {
+  position: fixed;
+  pointer-events: none;
+  z-index: 200;
+  transition: left 0.08s linear, top 0.08s linear;
+}
+
+.remote-cursor-label {
+  display: inline-block;
+  margin-left: 14px;
+  margin-top: -4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.activity-toggle {
+  padding: 6px 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink);
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+.activity-toggle:hover {
+  background: var(--color-surface-sunken);
+}

@@ -179,7 +179,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   },
 
   sendCursor: (x, y) => {
-    get().ws?.send(JSON.stringify({ type: "CURSOR_MOVE", x, y }));
+    const socket = get().ws; if (socket && socket.readyState === WebSocket.OPEN) { socket.send(JSON.stringify({ type: "CURSOR_MOVE", x, y })); }
   },
 
   addComment: (taskId, text) => {

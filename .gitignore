@@ -12,3 +12,4 @@ dist-ssr/
 *.sln
 *.sw?
 server/data.json
+.env

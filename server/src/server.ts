@@ -1,7 +1,9 @@
+import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { v4 as uuid } from "uuid";
 import fs from "fs";
 import path from "path";
@@ -161,6 +163,7 @@ app.use(
   })
 );
 app.use(express.json());
+app.use(cookieParser());
 
 const httpServer = createServer(app);
 const wss = new WebSocketServer({ server: httpServer });

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { BoardState, Task, Priority } from "../types";
+import { applyAddTask, applyUpdateTask, applyDeleteTask, applyMoveTask } from "./boardLogic";
 
 interface ActivityEntry {
   id: string;
@@ -49,7 +50,8 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       return;
     }
 
-    const wsUrl = import.meta.env.VITE_WS_URL || "ws://localhost:3001"; const ws = new WebSocket(wsUrl);
+    const wsUrl = import.meta.env.VITE_WS_URL || "ws://localhost:3001";
+    const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
       set({ ws, connected: true });
@@ -81,61 +83,26 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
           set({ onlineUsers: msg.users });
           break;
 
-        case "TASK_ADDED":
-          set((state) => ({
-            tasks: { ...state.tasks, [msg.task.id]: msg.task },
-            columns: {
-              ...state.columns,
-              [msg.task.columnId]: {
-                ...state.columns[msg.task.columnId],
-                taskIds: [...state.columns[msg.task.columnId].taskIds, msg.task.id],
-              },
-            },
-          }));
+        case "TASK_ADDED": {
+          const { task } = msg;
+          set((state) =>
+            applyAddTask(state, task.id, task.columnId, task.title, task.description, task.priority)
+          );
           break;
+        }
 
         case "TASK_UPDATED":
-          set((state) => ({
-            tasks: {
-              ...state.tasks,
-              [msg.taskId]: { ...state.tasks[msg.taskId], ...msg.updates },
-            },
-          }));
+          set((state) => applyUpdateTask(state, msg.taskId, msg.updates));
           break;
 
         case "TASK_DELETED":
-          set((state) => {
-            const { [msg.taskId]: _, ...remainingTasks } = state.tasks;
-            return {
-              tasks: remainingTasks,
-              columns: {
-                ...state.columns,
-                [msg.columnId]: {
-                  ...state.columns[msg.columnId],
-                  taskIds: state.columns[msg.columnId].taskIds.filter((id) => id !== msg.taskId),
-                },
-              },
-            };
-          });
+          set((state) => applyDeleteTask(state, msg.taskId));
           break;
 
         case "TASK_MOVED":
-          set((state) => {
-            const { taskId, sourceColumnId, destColumnId, destIndex } = msg;
-            const sourceIds = state.columns[sourceColumnId].taskIds.filter((id) => id !== taskId);
-            const destIds = sourceColumnId === destColumnId
-              ? [...sourceIds]
-              : [...state.columns[destColumnId].taskIds];
-            destIds.splice(destIndex, 0, taskId);
-            return {
-              tasks: { ...state.tasks, [taskId]: { ...state.tasks[taskId], columnId: destColumnId } },
-              columns: {
-                ...state.columns,
-                [sourceColumnId]: { ...state.columns[sourceColumnId], taskIds: sourceIds },
-                [destColumnId]: { ...state.columns[destColumnId], taskIds: destIds },
-              },
-            };
-          });
+          set((state) =>
+            applyMoveTask(state, msg.taskId, msg.sourceColumnId, msg.destColumnId, msg.destIndex)
+          );
           break;
 
         case "CURSOR_MOVE":
@@ -179,7 +146,10 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   },
 
   sendCursor: (x, y) => {
-    const socket = get().ws; if (socket && socket.readyState === WebSocket.OPEN) { socket.send(JSON.stringify({ type: "CURSOR_MOVE", x, y })); }
+    const socket = get().ws;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "CURSOR_MOVE", x, y }));
+    }
   },
 
   addComment: (taskId, text) => {

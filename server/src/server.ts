@@ -214,7 +214,7 @@ app.get("/api/board", (_req, res) => {
   res.json(state);
 });
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, () => {
   console.log(`FlowBoard server running on http://localhost:${PORT}`);
   console.log(`WebSocket server ready`);

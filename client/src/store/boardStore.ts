@@ -49,7 +49,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
       return;
     }
 
-    const ws = new WebSocket("ws://localhost:3001");
+    const wsUrl = import.meta.env.VITE_WS_URL || "ws://localhost:3001"; const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
       set({ ws, connected: true });

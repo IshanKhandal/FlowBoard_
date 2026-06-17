@@ -17,14 +17,22 @@ interface Comment {
   timestamp: number;
 }
 
+interface CurrentUser {
+  id: string;
+  name: string;
+  color: string;
+  avatarUrl: string | null;
+  provider: "github" | "guest";
+}
+
 interface BoardStore extends BoardState {
   ws: WebSocket | null;
   connected: boolean;
-  currentUser: { id: string; name: string; color: string } | null;
-  onlineUsers: { id: string; name: string; color: string }[];
+  currentUser: CurrentUser | null;
+  onlineUsers: CurrentUser[];
   activityLog: ActivityEntry[];
   comments: Record<string, Comment[]>;
-  connect: () => void;
+  connect: (guestName?: string) => void;
   addTask: (columnId: string, title: string, description: string, priority: Priority) => void;
   updateTask: (taskId: string, updates: Partial<Pick<Task, "title" | "description" | "priority">>) => void;
   deleteTask: (taskId: string) => void;
@@ -44,14 +52,26 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
   activityLog: [],
   comments: {},
 
-  connect: () => {
+  /**
+   * WHY DOES connect() TAKE AN OPTIONAL guestName?
+   *
+   * A signed-in user already has a session cookie, so the server can
+   * identify them without any extra info from this call. A guest has
+   * no cookie, so the only way to carry their chosen display name to
+   * the server is on the connection itself — here, as a query param on
+   * the WebSocket URL. The server checks the session cookie FIRST and
+   * only falls back to this query param if no session exists, so a
+   * guest can never use this to impersonate a logged-in identity.
+   */
+  connect: (guestName) => {
     const existing = get().ws;
     if (existing && (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)) {
       return;
     }
 
     const wsUrl = import.meta.env.VITE_WS_URL || "ws://localhost:3001";
-    const ws = new WebSocket(wsUrl);
+    const url = guestName ? `${wsUrl}/?guestName=${encodeURIComponent(guestName)}` : wsUrl;
+    const ws = new WebSocket(url);
 
     ws.onopen = () => {
       set({ ws, connected: true });
@@ -59,7 +79,7 @@ export const useBoardStore = create<BoardStore>((set, get) => ({
 
     ws.onclose = () => {
       set({ connected: false, ws: null });
-      setTimeout(() => get().connect(), 2000);
+      setTimeout(() => get().connect(guestName), 2000);
     };
 
     ws.onmessage = (event) => {

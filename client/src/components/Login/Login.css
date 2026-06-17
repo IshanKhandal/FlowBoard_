@@ -1,0 +1,108 @@
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.login-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: var(--shadow-card-hover);
+  text-align: center;
+}
+
+.login-logo {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 32px;
+  font-weight: 500;
+  margin: 0 0 8px;
+  color: var(--color-ink);
+}
+
+.login-tagline {
+  font-size: 13px;
+  color: var(--color-ink-muted);
+  margin: 0 0 28px;
+  line-height: 1.5;
+}
+
+.login-github-btn {
+  width: 100%;
+  padding: 11px;
+  background: #1A1B1E;
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.login-github-btn:hover {
+  opacity: 0.85;
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  margin: 20px 0;
+  color: var(--color-ink-muted);
+  font-size: 12px;
+}
+
+.login-divider::before,
+.login-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.login-divider span {
+  padding: 0 10px;
+}
+
+.login-guest-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.login-guest-form input {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: var(--font-ui);
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+
+.login-guest-form input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+.login-guest-btn {
+  padding: 10px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.login-guest-btn:hover {
+  background: var(--color-surface-sunken);
+}

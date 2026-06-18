@@ -2,12 +2,20 @@
 
 # FlowBoard
 
-Drag a card. Watch it move on someone else's screen, instantly.
+<!-- 📸 Add a screenshot or short GIF of the board here — drag-and-drop in action sells this instantly -->
+
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&logoColor=white)
+![WebSocket](https://img.shields.io/badge/WebSocket-Real--time-FF6B6B)
+![Tests](https://img.shields.io/badge/tests-10%20passing-7C9A82)
+
+### Drag a card. Watch it move on someone else's screen, instantly.
 
 A real-time collaborative Kanban board built in React, TypeScript, and WebSockets. Multiple people work the same board at once — every move, comment, and cursor position syncs live, no refresh, no polling, no delay.
 
-**Live: https://flowboard-blond-two.vercel.app**
-*(Backend runs on Render's free tier — the first load after inactivity can take 30-60 seconds to wake up.)*
+**Live:** https://flowboard-blond-two.vercel.app
+*(Backend runs on Render's free tier — the first load after inactivity can take 30–60 seconds to wake up.)*
 
 ## What it does
 

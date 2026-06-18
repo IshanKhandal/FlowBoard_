@@ -1,64 +1,68 @@
+<img src="logo.svg" width="48" height="48" alt="FlowBoard logo" />
+
 # FlowBoard
 
-A real-time collaborative Kanban board. Multiple users can create, edit, and drag tasks between columns, comment on tasks, and see every change sync instantly across all connected clients — no refresh needed.
+Drag a card. Watch it move on someone else's screen, instantly.
 
-flowboard-project/
+A real-time collaborative Kanban board built in React, TypeScript, and WebSockets. Multiple people work the same board at once — every move, comment, and cursor position syncs live, no refresh, no polling, no delay.
 
-├── client/   React + TypeScript frontend
+**Live: https://flowboard-blond-two.vercel.app**
+*(Backend runs on Render's free tier — the first load after inactivity can take 30-60 seconds to wake up.)*
 
-└── server/   Node.js + Express + WebSocket backend
-**Live demo:** https://flowboard-blond-two.vercel.app
-*(Note: the backend is on Render's free tier, so the first request after a period of inactivity may take 30-60 seconds while the server wakes up.)*
+## What it does
 
-## Features
+- Drag-and-drop tasks across To Do / In Progress / Done, synced live across every connected client
+- Live cursors — see exactly where everyone else on the board is pointing, in real time
+- Online presence, so you know who's here right now
+- Comments on tasks, synced instantly
+- A running activity feed of every action taken on the board
+- Sign in with GitHub, or skip straight in as a guest
+- Board state survives server restarts
+- Form validation, keyboard-accessible drag and drop, responsive on mobile
+- 10 unit tests covering the core state logic
 
-- Drag-and-drop task management across columns (To Do / In Progress / Done)
-- Real-time multi-user sync via WebSockets — every action (create, edit, delete, move, comment) broadcasts live to all connected clients
-- Live cursor tracking — see other users' mouse positions moving on screen in real time
-- Online presence indicators showing who is currently connected
-- Comments on individual tasks, synced live
-- Activity timeline showing a real-time feed of all actions taken on the board
-- Persistent storage — board state survives server restarts
-- Form validation on task creation and editing
-- Keyboard-accessible drag and drop
-- Responsive layout for mobile and desktop
-- Unit tests covering the core state-transition logic (add, update, delete, move)
+## Built with
 
-## Tech Stack
+**Client:** React, TypeScript, Vite, Zustand, dnd-kit, Vitest
+**Server:** Node.js, Express, ws, GitHub OAuth, file-based persistence
 
-**Frontend (`client/`):** React, TypeScript, Vite, Zustand, dnd-kit, Vitest
+## The decisions behind it
 
-**Backend (`server/`):** Node.js, Express, ws (WebSocket server), file-based persistence
+**One repo, not two.** Client and server are small enough and tightly coupled enough in purpose that splitting them just means two READMEs for one system. The trade-off: no independent deploy isolation, which matters more at a scale this project isn't at.
 
-## Why these choices
+**Zustand over Redux.** Same single-source-of-truth model, direct function calls instead of action/reducer/dispatch ceremony. Right amount of structure for this size.
 
-- **One repo instead of two** — the client and server are small enough, and tightly enough coupled in purpose, that splitting them would mean two READMEs and two places to look for one system. A monorepo with clear `client/` and `server/` folders keeps the whole architecture visible in one place. This trades away independent deploy-pipeline isolation, which would matter more at a larger scale with separate teams owning each piece.
-- **Zustand over Redux** — same single-source-of-truth model with direct function calls instead of action/reducer/dispatch boilerplate, while staying simple enough for a project this size.
-- **Normalized state** (tasks and columns as flat objects linked by ID, not nested) — moving a task between columns becomes "update two arrays of IDs," and it is the same shape that makes broadcasting small diffs over WebSocket tractable.
-- **dnd-kit over react-dnd** — first-class keyboard and touch support out of the box, which matters for accessibility and mobile use.
-- **WebSockets over polling** — task moves, comments, and cursor positions need to feel instant; polling would add latency and unnecessary network load.
-- **JSON file over a database for persistence** — the data is small, has a single-writer pattern (one server process), and needs no relational queries. A flat file rewritten on change gives durability across restarts without the operational overhead of running and managing a separate database service. This would not scale to multiple concurrent server instances, at which point a real database becomes the right call.
-- **Pure functions extracted for the core state logic** (`client/src/store/boardLogic.ts`) — the WebSocket message handler in the Zustand store calls into plain, side-effect-free functions (`applyAddTask`, `applyMoveTask`, etc.) rather than inlining the array/object manipulation. This means the exact logic that runs in production is the same logic covered by unit tests — there's no separate "tested copy" that could silently drift from what actually runs.
+**Normalized state.** Tasks and columns live as flat objects linked by ID, not nested. Moving a task between columns becomes "update two arrays of IDs" — and it's the same shape that makes broadcasting small diffs over a socket actually tractable.
 
-## Running locally
+**dnd-kit over react-dnd.** Keyboard and touch support out of the box, which matters for both accessibility and mobile.
 
-**Backend:**
+**WebSockets, not polling.** A task move or a cursor position has to feel instant. Polling adds latency a collaborative board can't afford.
+
+**A JSON file, not a database.** Single server process, single writer, no relational queries needed. A flat file rewritten on change gives durability without the operational weight of running a separate database — until the app needs more than one server instance, at which point this stops being the right call.
+
+**A signed session map, not a JWT.** Sessions live server-side in memory, the same philosophy as the JSON file: simple, and trivially revocable. Logout deletes the entry and the cookie is instantly worthless — no blocklist required. The trade-off is sessions don't survive a server restart, which is already true of the live WebSocket state, so it's not a new gap, just a consistent one.
+
+**Pure functions for the core logic.** The WebSocket handler calls into plain, side-effect-free functions (`applyAddTask`, `applyMoveTask`, etc.) instead of inlining the array work. The exact logic running in production is the same logic the tests cover — no separate tested copy that could quietly drift from what actually runs.
+
+## Run it yourself
+
+**Server:**
 ```bash
 cd server
 npm install
 npm run dev
 ```
 
-**Frontend:**
+**Client:**
 ```bash
 cd client
 npm install
 npm run dev
 ```
 
-Open the printed URL (typically `http://localhost:5173`). Open it in a second browser tab to see real-time sync, presence, and live cursors in action.
+Open the printed URL, then open it again in a second tab. Drag a card. Watch the other tab.
 
-## Running tests
+## Tests
 
 ```bash
 cd client
